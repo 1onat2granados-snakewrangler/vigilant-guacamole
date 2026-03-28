@@ -15,8 +15,8 @@ st.set_page_config(page_title="Local Costing Vault", page_icon="📝")
 CSV_FILE = 'food_business_vault.csv'
 
 def main():
-    st.title("📝 Python's Hug: The Local CSV Wrangler")
-    st.markdown("Back to basics, back to the bush! *Yodel-ay-hee-hooo!*")
+    st.title("📝 Python's Hug: The Local Food Costing Calculator")
+    st.markdown("Calculate your food costs Now!*")
 
     # --- SIDEBAR ---
     st.sidebar.header("Batch Configuration")
