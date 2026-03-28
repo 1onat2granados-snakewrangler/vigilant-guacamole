@@ -5,56 +5,47 @@
 # ==========================================================
 
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import os
 
-st.set_page_config(page_title="Cloud Costing Vault", page_icon="☁️")
+st.set_page_config(page_title="Local Costing Vault", page_icon="📝")
+
+# --- FILE CONFIG ---
+CSV_FILE = 'food_business_vault.csv'
 
 def main():
-    st.title("☁️ Python's Hug: The Pruning Wrangler")
-    st.markdown("Edit your list with surgical precision! *Yodel-ay-hee-hooo!*")
-
-    # Establish Connection (Requires st.secrets)
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-    except Exception:
-        st.warning("Google Sheets not connected. Running in local-only mode!")
-        conn = None
+    st.title("📝 Python's Hug: The Local CSV Wrangler")
+    st.markdown("Back to basics, back to the bush! *Yodel-ay-hee-hooo!*")
 
     # --- SIDEBAR ---
     st.sidebar.header("Batch Configuration")
     servings = st.sidebar.number_input("Total Servings", min_value=1, value=10)
     overhead = st.sidebar.number_input("Operating Expenses", min_value=0.0, value=50.0)
-    
-    # REQUIREMENT: Change minimum margin to 1%
     margin = st.sidebar.slider("Margin (%)", min_value=1, max_value=95, value=30)
 
-    # --- INGREDIENTS LIST MANAGEMENT ---
+    # --- INGREDIENTS MANAGEMENT ---
     if 'ingredients' not in st.session_state:
         st.session_state.ingredients = []
 
     st.subheader("Manage Ingredients")
     
-    # Input area
     with st.expander("➕ Add New Ingredient", expanded=True):
         c1, c2 = st.columns([2, 1])
         new_item = c1.text_input("Ingredient Name")
-        new_cost = c2.number_input("Cost", min_value=0.0, key="new_cost_input")
+        new_cost = c2.number_input("Cost", min_value=0.0)
         if st.button("Add to Batch"):
             if new_item:
                 st.session_state.ingredients.append({"Name": new_item, "Cost": new_cost})
                 st.rerun()
 
-    # REQUIREMENT: Delete item feature
+    # Delete Feature
     if st.session_state.ingredients:
-        st.write("Current Ingredients:")
         for idx, item in enumerate(st.session_state.ingredients):
-            col_name, col_cost, col_del = st.columns([3, 2, 1])
-            col_name.text(item['Name'])
-            col_cost.text(f"{item['Cost']:,.2f}")
-            # The Delete Button
-            if col_del.button("❌", key=f"del_{idx}"):
+            col_n, col_c, col_d = st.columns([3, 2, 1])
+            col_n.text(item['Name'])
+            col_c.text(f"{item['Cost']:,.2f}")
+            if col_d.button("❌", key=f"del_{idx}"):
                 st.session_state.ingredients.pop(idx)
                 st.rerun()
     
@@ -63,35 +54,48 @@ def main():
     # --- CALCULATIONS ---
     total_cap = total_ing_cost + overhead
     cost_per = total_cap / servings
-    # Logic check to prevent division by zero if margin is 100%
     denom = (1 - (margin / 100))
     sell_price = cost_per / denom if denom > 0 else 0
     profit = (sell_price * servings) - total_cap
 
-    # --- RESULTS ---
     st.divider()
-    res1, res2 = st.columns(2)
-    res1.metric("Cost Per Serving", f"{cost_per:,.2f}")
-    res2.metric("Target Sale Price", f"{sell_price:,.2f}", delta=f"Margin: {margin}%")
+    m1, m2 = st.columns(2)
+    m1.metric("Cost Per Serving", f"{cost_per:,.2f}")
+    m2.metric("Target Sale Price", f"{sell_price:,.2f}")
 
-    # --- SYNC ---
-    if st.button("🚀 Sync to Google Sheets"):
-        if conn:
-            new_row = pd.DataFrame([{
-                'Date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'Servings': servings,
-                'Ingredient_Cost': round(total_ing_cost, 2),
-                'Total_Capital': round(total_cap, 2),
-                'Selling_Price': round(sell_price, 2),
-                'Net_Profit': round(profit, 2)
-            }])
-            # This logic assumes the sheet 'Sheet1' exists with headers
-            existing_data = conn.read(worksheet="Sheet1")
-            updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-            conn.update(worksheet="Sheet1", data=updated_df)
-            st.success("Yodeled to the cloud!")
+    # --- DATABASE ACTIONS ---
+    st.subheader("Vault Actions")
+    col_save, col_reset = st.columns(2)
+
+    if col_save.button("💾 Save to CSV"):
+        new_data = pd.DataFrame([{
+            'Date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'Servings': servings,
+            'Total_Capital': round(total_cap, 2),
+            'Selling_Price': round(sell_price, 2),
+            'Net_Profit': round(profit, 2)
+        }])
+        
+        # Append to CSV
+        if not os.path.isfile(CSV_FILE):
+            new_data.to_csv(CSV_FILE, index=False)
         else:
-            st.error("No cloud connection found, mate!")
+            new_data.to_csv(CSV_FILE, mode='a', header=False, index=False)
+        st.success("Saved to local vault!")
+
+    # REQUIREMENT: Reset feature
+    if col_reset.button("🔥 Reset CSV Database"):
+        if os.path.exists(CSV_FILE):
+            os.remove(CSV_FILE)
+            st.warning("Vault cleared! Starting from scratch.")
+        else:
+            st.info("Vault is already empty, mate!")
+
+    # --- VIEW HISTORY ---
+    if os.path.isfile(CSV_FILE):
+        with st.expander("View Historical Ledger"):
+            history = pd.read_csv(CSV_FILE)
+            st.dataframe(history)
 
 if __name__ == "__main__":
     main()
